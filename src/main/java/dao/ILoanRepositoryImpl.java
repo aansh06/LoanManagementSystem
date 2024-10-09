@@ -1,47 +1,39 @@
 package dao;
 
-import dao.ILoanRepository;
 import entity.Customer;
 import entity.Loan;
 import exception.InvalidLoanException;
-//import util.DBConnUtil;
+import util.DBConnUtil;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ILoanRepositoryImpl implements ILoanRepository{
     private Connection getConnection() throws SQLException {
-        return DBConnUtil.getConnection();
+        return DBConnUtil.getDBConn();
     }
 
     // a. Apply for a loan
     @Override
-    public boolean applyLoan(Loan loan) throws InvalidLoanException {
+    public boolean applyLoan(Loan loan, int custid) throws InvalidLoanException {
         boolean isApplied = false;
-        String sql = "INSERT INTO Loan (loanId, customerId, principalAmount, interestRate, loanTerm, loanType, loanStatus) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO Loan ( customerId, principalAmount, interestRate, loanTerm, loanType, loanStatus) VALUES ( ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, loan.getLoanId());
-            ps.setInt(2, loan.getCustomer().getCustomerId());  // Assuming you have a Customer object in the Loan class
-            ps.setDouble(3, loan.getPrincipalAmount());
-            ps.setDouble(4, loan.getInterestRate());
-            ps.setInt(5, loan.getLoanTerm());
-            ps.setString(6, loan.getLoanType());
-            ps.setString(7, "Pending");
+//            ps.setInt(1, loan.getLoanId());
+            ps.setInt(1, custid) ;
+            ps.setDouble(2, loan.getPrincipalAmount());
+            ps.setDouble(3, loan.getInterestRate());
+            ps.setInt(4, loan.getLoanTerm());
+            ps.setString(5, loan.getLoanType());
+            ps.setString(6, "Pending");
 
-
-            System.out.println("Confirm loan application (Yes/No):");
-            String confirmation = new java.util.Scanner(System.in).next();
-
-            if ("Yes".equalsIgnoreCase(confirmation)) {
-                int rowsAffected = ps.executeUpdate();
-                if (rowsAffected > 0) {
-                    isApplied = true;
-                }
-            } else {
-                System.out.println("Loan application cancelled.");
+            // Confirm loan application is done inside applyForLoan method
+            int rowsAffected = ps.executeUpdate();
+            if (rowsAffected > 0) {
+                isApplied = true;
             }
         } catch (SQLException e) {
             throw new InvalidLoanException("Error applying for loan: " + e.getMessage());
@@ -151,8 +143,8 @@ public class ILoanRepositoryImpl implements ILoanRepository{
 
     // Overloaded method to calculate EMI based on parameters during loan creation
     @Override
-    public double calculateEMI(double principalAmount, double interestRate, int loanTerm) {
-        double r = (interestRate / 12) / 100;
+    public double calculateEMI(double principalAmount, double r, int loanTerm) {
+//        double r = (interestRate / 12) / 100;
         return (principalAmount * r * Math.pow(1 + r, loanTerm)) / (Math.pow(1 + r, loanTerm) - 1);
     }
 
@@ -160,7 +152,7 @@ public class ILoanRepositoryImpl implements ILoanRepository{
     // e. Loan repayment: Pay EMI if the amount covers the EMI or reject
     @Override
     public void loanRepayment(int loanId, double amount) throws InvalidLoanException {
-        String sql = "SELECT emiAmount FROM Loan WHERE loanId = ?";
+        String sql = "SELECT principalAmount, interestRate, loanTerm FROM Loan WHERE loanId = ?";
 
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -168,13 +160,17 @@ public class ILoanRepositoryImpl implements ILoanRepository{
             ps.setInt(1, loanId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    double emiAmount = rs.getDouble("emiAmount");
+                    double principalAmount = rs.getDouble("principalAmount");
+                    double interestRate = rs.getDouble("interestRate") / 100 / 12;
+                    int loanTerm = rs.getInt("loanTerm");
+
+                    double emiAmount = calculateEMI(principalAmount, interestRate, loanTerm);
+
                     if (amount < emiAmount) {
                         throw new InvalidLoanException("Insufficient amount to cover EMI payment.");
                     } else {
                         System.out.println("EMI paid successfully. Remaining balance updated.");
-                        // update the loan balance and EMIs
-                    }
+                        updateLoanBalance(loanId, amount); }
                 } else {
                     throw new InvalidLoanException("Loan not found with ID: " + loanId);
                 }
@@ -184,23 +180,49 @@ public class ILoanRepositoryImpl implements ILoanRepository{
         }
     }
 
+    private void updateLoanBalance(int loanId, double paymentAmount) throws SQLException {
+
+        String sql = "UPDATE Loan SET principalAmount = principalAmount - ? WHERE loanId = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDouble(1, paymentAmount);
+            ps.setInt(2, loanId);
+            ps.executeUpdate();
+        }
+    }
+
 
     // f. Retrieve and return all loans from the database
     @Override
     public List<Loan> getAllLoan() {
         List<Loan> loans = new ArrayList<>();
-        String sql = "SELECT * FROM Loan";
+        String sql = "SELECT l.loanId, l.customerId, l.principalAmount, l.interestRate, l.loanTerm, l.loanType, l.loanStatus, c.name, c.emailAddress, c.phoneNumber, c.address, c.creditScore FROM Loan l JOIN Customer c ON l.customerId = c.customerId";
 
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
-                // Populate Loan object with retrieved data
                 Loan loan = new Loan();
                 loan.setLoanId(rs.getInt("loanId"));
-                // Set other loan properties here
+                loan.setPrincipalAmount(rs.getDouble("principalAmount"));
+                loan.setInterestRate(rs.getDouble("interestRate"));
+                loan.setLoanTerm(rs.getInt("loanTerm"));
+                loan.setLoanType(rs.getString("loanType"));
+                loan.setLoanStatus(rs.getString("loanStatus"));
+
+                Customer customer = new Customer();
+                customer.setCustomerId(rs.getInt("customerId"));
+                customer.setName(rs.getString("name"));
+                customer.setEmailAddress(rs.getString("emailAddress"));
+                customer.setPhoneNumber(rs.getString("phoneNumber"));
+                customer.setAddress(rs.getString("address"));
+                customer.setCreditScore(rs.getInt("creditScore"));
+
+                loan.setCustomer(customer);
+
                 loans.add(loan);
+
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving all loans: " + e.getMessage());
@@ -243,7 +265,8 @@ public class ILoanRepositoryImpl implements ILoanRepository{
         return loan;
     }
 
-    private Customer getCustomerById(int customerId) throws SQLException {
+    @Override
+    public Customer getCustomerById(int customerId) throws SQLException {
         String sql = "SELECT * FROM Customer WHERE customerId = ?";
         Customer customer = null;
 
@@ -256,7 +279,7 @@ public class ILoanRepositoryImpl implements ILoanRepository{
                     customer = new Customer();
                     customer.setCustomerId(rs.getInt("customerId"));
                     customer.setName(rs.getString("name"));
-                    customer.setEmailAddress(rs.getString("email"));
+                    customer.setEmailAddress(rs.getString("emailAddress"));
                     customer.setPhoneNumber(rs.getString("phoneNumber"));
                     customer.setAddress(rs.getString("address"));
                     customer.setCreditScore(rs.getInt("creditScore"));
@@ -266,5 +289,35 @@ public class ILoanRepositoryImpl implements ILoanRepository{
 
         return customer;
     }
+
+    @Override
+    public int addCustomer(Customer customer) throws SQLException {
+        String sql = "INSERT INTO Customer ( name, emailAddress, phoneNumber, address, creditScore) VALUES (?, ?, ?, ?, ?)";
+
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+//            ps.setInt(1, customer.getCustomerId());
+            ps.setString(1, customer.getName());
+            ps.setString(2, customer.getEmailAddress());
+            ps.setString(3, customer.getPhoneNumber());
+            ps.setString(4, customer.getAddress());
+            ps.setInt(5, customer.getCreditScore());
+
+            int r=ps.executeUpdate();
+
+            if (r == 0) {
+                throw new SQLException("Inserting customer failed, no rows affected.");
+            }
+
+            ResultSet generatedKeys = ps.getGeneratedKeys();
+            if (generatedKeys.next()) {
+                return generatedKeys.getInt(1); // Return the generated customerId
+            } else {
+                throw new SQLException("Inserting customer failed, no customerId obtained.");
+            }
+        }
+    }
+
 
 }

@@ -7,6 +7,8 @@ public class HomeLoan extends Loan {
     private boolean firstTimeBuyer;
     private double homeArea;
 
+
+
     public HomeLoan() {
         super();
         this.propertyAddress = "Unknown";
@@ -15,13 +17,20 @@ public class HomeLoan extends Loan {
         this.homeArea = 0;
     }
 
-    public HomeLoan(int loanId, Customer customer, double principalAmount, double interestRate, int loanTerm, String loanType, String loanStatus, String propertyAddress, int propertyValue, boolean firstTimeBuyer, double homeArea) {
-        super(loanId, customer, principalAmount, interestRate, loanTerm, "Home Loan", loanStatus);
+    public HomeLoan(int loanId, Customer customer, double principalAmount, double interestRate, int loanTerm, String propertyAddress, int propertyValue, boolean firstTimeBuyer, double homeArea) {
+        super(loanId, customer, principalAmount, interestRate, loanTerm, "Home Loan", "Pending");
         this.propertyAddress = propertyAddress;
         this.propertyValue = propertyValue;
         this.firstTimeBuyer = firstTimeBuyer;
         this.homeArea = homeArea;
     }
+
+    //loan = new HomeLoan(0,
+    // customer,
+    // principalAmount,
+    // interestRate,
+    // loanTerm, propertyAddress, propertyValue, firstTimeBuyer, homeArea);
+
 
     public String getPropertyAddress() {
         return propertyAddress;

@@ -14,8 +14,8 @@ public class CarLoan extends Loan {
         this.carType = "Unknown";
     }
 
-    public CarLoan(int loanId, Customer customer, double principalAmount, double interestRate, int loanTerm, String loanType, String loanStatus, String carModel, int carValue, int manufacturingYear, String carType) {
-        super(loanId, customer, principalAmount, interestRate, loanTerm, loanType, loanStatus);
+    public CarLoan(int loanId, Customer customer, double principalAmount, double interestRate, int loanTerm, String carModel, int carValue, int manufacturingYear, String carType) {
+        super(loanId, customer, principalAmount, interestRate, loanTerm, "Car Loan", "Pending");
         this.carModel = carModel;
         this.carValue = carValue;
         this.manufacturingYear = manufacturingYear;
